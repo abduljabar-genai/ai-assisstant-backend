@@ -37,17 +37,29 @@ app.use(async (req, res, next) => {
 });
 
 // Uploads directory configuration
-const uploadsDir = path.resolve('uploads');
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-app.use('/uploads', express.static(uploadsDir));
+// Detect if running on Vercel
+const isVercel = process.env.VERCEL === '1';
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadsDir),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '_' + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  },
-});
+// Setup uploads folder (only create locally, use /tmp on Vercel)
+const uploadsDir = isVercel ? '/tmp' : path.resolve('uploads');
+
+if (!isVercel) {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+  app.use('/uploads', express.static(uploadsDir));
+}
+
+// Storage: Memory storage on Vercel, Disk storage locally
+const storage = isVercel
+  ? multer.memoryStorage()
+  : multer.diskStorage({
+      destination: (req, file, cb) => cb(null, uploadsDir),
+      filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '_' + Math.round(Math.random() * 1e9);
+        cb(null, uniqueSuffix + path.extname(file.originalname));
+      },
+    });
 
 const upload = multer({
   storage,
