@@ -6,6 +6,7 @@ import fs from 'fs';
 import cookieParser from 'cookie-parser';
 import env from './config/env.js';
 import connectDB from './config/database.js';
+
 import authRouter from './routes/auth.routes.js';
 import noteRouter from './routes/note.routes.js';
 import assistantRouter from './routes/assistant.routes.js';
@@ -18,13 +19,24 @@ import profileRouter from './routes/profile.routes.js';
 import progressRouter from './routes/progress.routes.js';
 
 const app = express();
-const PORT = env.PORT;
+const PORT = env.PORT || 3000;
 
 app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser());
 app.use(cors({ origin: env.CLIENT_URL, credentials: true }));
 
-// Uploads directory
+// Database connection middleware for serverless execution
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    console.error('Database connection failure:', error);
+    res.status(500).json({ message: 'Database connection failed' });
+  }
+});
+
+// Uploads directory configuration
 const uploadsDir = path.resolve('uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 app.use('/uploads', express.static(uploadsDir));
@@ -39,7 +51,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 200 * 1024 * 1024 }, // 200MB — allows zoom video recordings
+  limits: { fileSize: 200 * 1024 * 1024 }, // 200MB
 });
 
 // Routes
@@ -65,16 +77,12 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Internal server error' });
 });
 
-async function startServer() {
-  try {
-    await connectDB();
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
-    });
-  } catch (error) {
-    console.error('Failed to start server:', error.message);
-    process.exit(1);
-  }
+// Start listener only when running locally (outside Vercel environment)
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
 }
 
-startServer();
+// Export Express app for Vercel serverless functions
+export default app;
