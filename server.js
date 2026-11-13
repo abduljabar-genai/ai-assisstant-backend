@@ -23,7 +23,7 @@ const PORT = env.PORT || 3000;
 
 app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser());
-app.use(cors({ origin: "https://ai-assisstant-cleint.vercel.app/", credentials: true }));
+app.use(cors({ origin: "https://ai-assisstant-cleint.vercel.app", credentials: true }));
 
 // Database connection middleware for serverless execution
 app.use(async (req, res, next) => {
