@@ -1,6 +1,37 @@
+
 import env from '../config/env.js';
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+
+const OPENROUTER_URL =
+  'https://openrouter.ai/api/v1/chat/completions';
+
+// Select AI provider based on environment variable
+function getAIProvider() {
+  if (env.GROK_ENABLE) {
+    if (!env.GROQ_API_KEY) {
+      throw new Error('GROQ_API_KEY is not configured');
+    }
+
+    return {
+      name: 'Groq',
+      url: GROQ_URL,
+      apiKey: env.GROQ_API_KEY,
+      model: env.GROQ_MODEL,
+    };
+  }
+
+  if (!env.OPENROUTER_API_KEY) {
+    throw new Error('OPENROUTER_API_KEY is not configured');
+  }
+
+  return {
+    name: 'OpenRouter',
+    url: OPENROUTER_URL,
+    apiKey: env.OPENROUTER_API_KEY,
+    model: env.OPENROUTER_MODEL,
+  };
+}
 
 function systemPrompt(extra = '') {
   return [
@@ -13,54 +44,74 @@ function systemPrompt(extra = '') {
     .join(' ');
 }
 
-async function callGroq(messages, { json = false, maxTokens = 2000 } = {}) {
-  if (!env.GROQ_API_KEY) {
-    throw new Error('GROQ_API_KEY is not configured on the server');
-  }
+async function callAI(messages, { json = false, maxTokens = 2000 } = {}) {
+  const provider = getAIProvider();
 
   const body = {
-    model: env.GROQ_MODEL,
+    model: provider.model,
     messages,
     temperature: 0.6,
     max_tokens: maxTokens,
   };
+
   if (json) {
     body.response_format = { type: 'json_object' };
   }
 
-  const response = await fetch(GROQ_URL, {
+  const response = await fetch(provider.url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.GROQ_API_KEY}`,
+      Authorization: `Bearer ${provider.apiKey}`,
+
+      // OpenRouter-specific headers
+      ...(provider.name === 'OpenRouter'
+        ? {
+            'HTTP-Referer': env.CLIENT_URL,
+            'X-Title': 'Personal Student Assistant',
+          }
+        : {}),
     },
     body: JSON.stringify(body),
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Groq API error ${response.status}: ${text.slice(0, 300)}`);
+    const errorText = await response.text();
+
+    throw new Error(
+      `${provider.name} API error ${response.status}: ${errorText.slice(0, 500)}`
+    );
   }
 
   const data = await response.json();
-  return data.choices?.[0]?.message?.content ?? '';
+
+  const content = data.choices?.[0]?.message?.content;
+
+  if (typeof content !== 'string') {
+    throw new Error(`${provider.name} returned an invalid response`);
+  }
+
+  return content;
 }
 
 async function chat(messages, options) {
-  return callGroq(messages, options);
+  return callAI(messages, options);
 }
 
 async function summarizeNote(content, title) {
-  const raw = await callGroq(
+  const raw = await callAI(
     [
       { role: 'system', content: systemPrompt('Return JSON only.') },
       {
         role: 'user',
-        content: `Summarize these class notes titled "${title}". Return JSON with keys: "summary" (short paragraph), "keyTopics" (array of strings).\n\n${content.slice(0, 12000)}`,
+        content: `Summarize these class notes titled "${title}". Return JSON with keys: "summary" (short paragraph), "keyTopics" (array of strings).
+
+${content.slice(0, 12000)}`,
       },
     ],
     { json: true, maxTokens: 1200 }
   );
+
   return JSON.parse(raw);
 }
 
@@ -72,7 +123,7 @@ async function explainTopic(topic, context = '', learningStyle = 'mixed') {
         ? 'Include a small practice example the student can try.'
         : '';
 
-  return callGroq([
+  return callAI([
     { role: 'system', content: systemPrompt(styleHint) },
     {
       role: 'user',
@@ -82,35 +133,41 @@ async function explainTopic(topic, context = '', learningStyle = 'mixed') {
 }
 
 async function generateMindMap(content, title) {
-  const raw = await callGroq(
+  const raw = await callAI(
     [
       { role: 'system', content: systemPrompt('Return JSON only.') },
       {
         role: 'user',
-        content: `Create a study mind map for notes titled "${title}". Return JSON: {"center": "<topic>", "branches": [{"label": "<branch>", "children": ["<leaf>", ...]}, ...]} with 3-6 branches, each 2-5 children.\n\n${content.slice(0, 12000)}`,
+        content: `Create a study mind map for notes titled "${title}". Return JSON: {"center": "<topic>", "branches": [{"label": "<branch>", "children": ["<leaf>", ...]}, ...]} with 3-6 branches, each 2-5 children.
+
+${content.slice(0, 12000)}`,
       },
     ],
     { json: true, maxTokens: 1500 }
   );
+
   return JSON.parse(raw);
 }
 
 async function generateQuiz(subject, material, count = 5) {
-  const raw = await callGroq(
+  const raw = await callAI(
     [
       { role: 'system', content: systemPrompt('Return JSON only.') },
       {
         role: 'user',
-        content: `Create a ${count}-question quiz for subject "${subject}" based on this material. Return JSON: {"questions": [{"text": "...", "options": ["a","b","c","d"], "correctIndex": 0-3, "explanation": "..."}]}. Use mostly multiple choice; at most one open-ended question with empty options and correctIndex -1.\n\n${material.slice(0, 12000)}`,
+        content: `Create a ${count}-question quiz for subject "${subject}" based on this material. Return JSON: {"questions": [{"text": "...", "options": ["a","b","c","d"], "correctIndex": 0-3, "explanation": "..."}]}. Use mostly multiple choice; at most one open-ended question with empty options and correctIndex -1.
+
+${material.slice(0, 12000)}`,
       },
     ],
     { json: true, maxTokens: 2500 }
   );
+
   return JSON.parse(raw).questions ?? [];
 }
 
 async function generateStudyPlan(subjects, dailyGoalMinutes, weekDays = 6) {
-  const raw = await callGroq(
+  const raw = await callAI(
     [
       { role: 'system', content: systemPrompt('Return JSON only.') },
       {
@@ -120,11 +177,12 @@ async function generateStudyPlan(subjects, dailyGoalMinutes, weekDays = 6) {
     ],
     { json: true, maxTokens: 2500 }
   );
+
   return JSON.parse(raw);
 }
 
 async function generateRevisionPlan(subjects, weakTopics = []) {
-  const raw = await callGroq(
+  const raw = await callAI(
     [
       { role: 'system', content: systemPrompt('Return JSON only.') },
       {
@@ -134,15 +192,20 @@ async function generateRevisionPlan(subjects, weakTopics = []) {
     ],
     { json: true, maxTokens: 2000 }
   );
+
   return JSON.parse(raw);
 }
 
 async function answerQuestion(question, history = []) {
   const messages = [
     { role: 'system', content: systemPrompt() },
-    ...history.slice(-10).map((m) => ({ role: m.role, content: m.content })),
+    ...history.slice(-10).map((m) => ({
+      role: m.role,
+      content: m.content,
+    })),
     { role: 'user', content: question },
   ];
+
   return chat(messages);
 }
 
