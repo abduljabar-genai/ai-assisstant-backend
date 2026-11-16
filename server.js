@@ -19,7 +19,7 @@ import profileRouter from './routes/profile.routes.js';
 import progressRouter from './routes/progress.routes.js';
 
 const app = express();
-const PORT = env.PORT || 3000;
+const PORT = process.env.PORT || env.PORT || 80;
 
 app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser());
@@ -89,12 +89,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Internal server error' });
 });
 
-// Start listener only when running locally (outside Vercel environment)
-if (process.env.VERCEL !== '1') {
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-  });
-}
 
-// Export Express app for Vercel serverless functions
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
 export default app;
