@@ -13,9 +13,8 @@ const env = {
   GROQ_MODEL: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
 
   // OpenRouter
-  OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
-  OPENROUTER_MODEL:
-    process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct',
+  OPEN_ROUTER_API_KEY: process.env.OPEN_ROUTER_API_KEY || '',
+  OPEN_ROUTER_MODEL: process.env.OPEN_ROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct',
 
   CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
 };

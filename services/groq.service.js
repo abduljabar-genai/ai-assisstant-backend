@@ -23,15 +23,16 @@ function getAIProvider() {
     };
   }
 
-  if (!env.OPENROUTER_API_KEY) {
+  if (!env.OPEN_ROUTER_API_KEY) {
     throw new Error('OPENROUTER_API_KEY is not configured');
   }
 
+  
   return {
     name: 'OpenRouter',
     url: OPENROUTER_URL,
-    apiKey: env.OPENROUTER_API_KEY,
-    model: env.OPENROUTER_MODEL,
+    apiKey: env.OPEN_ROUTER_API_KEY,
+    model: env.OPEN_ROUTER_MODEL,
   };
 }
 

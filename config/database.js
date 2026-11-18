@@ -3,7 +3,8 @@ import env from './env.js';
 
 async function connectDB() {
   try {
-    await mongoose.connect("mongodb+srv://abduljabar:LtkPRFFz01DAuJYW@cluster0.9wiwffg.mongodb.net/");
+    const db_url=env.MONGO_URI
+    await mongoose.connect(db_url);
     console.log('db connected successfully.');
   } catch (error) {
     throw new Error('Error connecting db: ' + error.message);
